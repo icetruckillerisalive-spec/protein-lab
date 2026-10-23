@@ -1,4 +1,3 @@
-python
 import streamlit as st
 import pandas as pd
 import py3Dmol
@@ -11,7 +10,6 @@ st.set_page_config(
     layout="wide",
 )
 
-# ---------- STYLE ----------
 st.markdown("""
 <style>
 .stApp {
@@ -34,7 +32,6 @@ div[data-testid="stMetric"] {
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- HEADER ----------
 st.title("PROTEIN//LAB")
 st.caption("COMPUTATIONAL STRUCTURAL BIOINFORMATICS")
 
@@ -49,7 +46,6 @@ page = st.sidebar.radio(
     ],
 )
 
-# ---------- PROTEIN DATA ----------
 proteins = pd.DataFrame([
     {
         "Protein ID": "24FX",
@@ -93,7 +89,7 @@ proteins = pd.DataFrame([
     },
 ])
 
-# ---------- OVERVIEW ----------
+# OVERVIEW
 if page == "Overview":
     st.header("Project Overview")
 
@@ -103,7 +99,9 @@ if page == "Overview":
         "and deep learning."
     )
 
-    completed = int((proteins["Prediction"] == "Complete").sum())
+    completed = int(
+        (proteins["Prediction"] == "Complete").sum()
+    )
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Reference proteins", len(proteins))
@@ -129,13 +127,13 @@ if page == "Overview":
         hide_index=True,
     )
 
-# ---------- STRUCTURE LAB ----------
+# STRUCTURE LAB
 elif page == "Structure Lab":
     st.header("3D Protein Structure")
+
     st.write(
-        "Inspect the predicted structure of 24FX. "
-        "Upload the corresponding PDB file below if it is not "
-        "already included in the app repository."
+        "Inspect a predicted protein structure by uploading "
+        "its PDB file."
     )
 
     uploaded_pdb = st.file_uploader(
@@ -148,7 +146,8 @@ elif page == "Structure Lab":
 
     if uploaded_pdb is not None:
         pdb_text = uploaded_pdb.getvalue().decode(
-            "utf-8", errors="replace"
+            "utf-8",
+            errors="replace",
         )
     else:
         possible_paths = [
@@ -160,17 +159,23 @@ elif page == "Structure Lab":
         for pdb_path in possible_paths:
             if pdb_path.exists():
                 pdb_text = pdb_path.read_text(
-                    encoding="utf-8", errors="replace"
+                    encoding="utf-8",
+                    errors="replace",
                 )
                 st.success(f"Loaded structure: {pdb_path}")
                 break
 
     if pdb_text:
-        if not any(
+        has_atoms = any(
             line.startswith(("ATOM  ", "HETATM"))
             for line in pdb_text.splitlines()
-        ):
-            st.error("The uploaded file does not appear to contain PDB atom records.")
+        )
+
+        if not has_atoms:
+            st.error(
+                "This file does not appear to contain "
+                "valid PDB atom records."
+            )
         else:
             view_style = st.selectbox(
                 "Structure representation",
@@ -179,31 +184,30 @@ elif page == "Structure Lab":
 
             color_style = st.selectbox(
                 "Color scheme",
-                ["Spectrum", "Chain", "Secondary structure"],
+                ["Spectrum", "Chain"],
             )
 
-            style_map = {
-                "Spectrum": {"cartoon": {"color": "spectrum"}},
-                "Chain": {"cartoon": {"color": "chain"}},
-                "Secondary structure": {
-                    "cartoon": {
-                        "color": "spectrum",
-                        "arrows": True,
-                    }
-                },
-            }
-
             if view_style == "Cartoon":
-                structure_style = style_map[color_style]
+                if color_style == "Spectrum":
+                    structure_style = {
+                        "cartoon": {"color": "spectrum"}
+                    }
+                else:
+                    structure_style = {
+                        "cartoon": {"color": "chain"}
+                    }
             elif view_style == "Stick":
                 structure_style = {"stick": {}}
             else:
-                structure_style = {"sphere": {"scale": 0.3}}
+                structure_style = {
+                    "sphere": {"scale": 0.3}
+                }
 
             viewer = py3Dmol.view(
                 width=900,
                 height=550,
             )
+
             viewer.addModel(pdb_text, "pdb")
             viewer.setStyle(structure_style)
             viewer.zoomTo()
@@ -215,36 +219,41 @@ elif page == "Structure Lab":
             )
 
             st.download_button(
-                "Download loaded PDB",
+                "Download PDB structure",
                 data=pdb_text,
                 file_name="protein_structure.pdb",
                 mime="chemical/x-pdb",
             )
     else:
         st.info(
-            "No PDB file is available yet. Upload the predicted "
-            "24FX rank-001 PDB file to display the 3D structure."
+            "Upload the 24FX rank-001 PDB file to display "
+            "the interactive 3D structure."
         )
 
     st.caption(
-        "The viewer displays the supplied coordinates; it does not "
+        "The viewer displays supplied coordinates. It does not "
         "perform a new prediction or structural validation."
     )
 
-# ---------- PROTEIN LIBRARY ----------
+# PROTEIN LIBRARY
 elif page == "Protein Library":
     st.header("Protein Library")
 
-    search = st.text_input("Search by protein ID or name")
+    search = st.text_input(
+        "Search by protein ID or name"
+    )
 
-    filtered = proteins[
-        proteins.apply(
-            lambda row: search.lower() in " ".join(
-                row.fillna("").astype(str)
-            ).lower(),
-            axis=1,
-        )
-    ] if search else proteins
+    if search:
+        filtered = proteins[
+            proteins.apply(
+                lambda row: search.lower() in " ".join(
+                    row.fillna("").astype(str)
+                ).lower(),
+                axis=1,
+            )
+        ]
+    else:
+        filtered = proteins
 
     st.dataframe(
         filtered,
@@ -269,12 +278,20 @@ elif page == "Protein Library":
     c3.metric("Prediction status", row["Prediction"])
 
     if pd.notna(row["TM-score"]):
-        st.metric("Preliminary TM-score", f"{row['TM-score']:.4f}")
-        st.metric("Preliminary RMSD", f"{row['RMSD (Å)']:.3f} Å")
+        st.metric(
+            "Preliminary TM-score",
+            f"{row['TM-score']:.4f}",
+        )
+        st.metric(
+            "Preliminary RMSD",
+            f"{row['RMSD (Å)']:.3f} Å",
+        )
     else:
-        st.info("Structural comparison metrics are not available yet.")
+        st.info(
+            "Structural comparison metrics are not available yet."
+        )
 
-# ---------- METHOD COMPARISON ----------
+# METHOD COMPARISON
 elif page == "Method Comparison":
     st.header("Prediction Method Comparison")
 
@@ -304,21 +321,24 @@ elif page == "Method Comparison":
         "benchmark proteins and a consistent evaluation protocol."
     )
 
-# ---------- PROJECT INFORMATION ----------
+# PROJECT INFORMATION
 elif page == "Project Information":
     st.header("Project Information")
 
     st.write(
-        "**Project title:** Comparative Performance Analysis of "
-        "Computational Tools for 3D Protein Structure Prediction "
-        "Using Machine Learning and Deep Learning"
+        "**Project title:** Comparative Performance Analysis "
+        "of Computational Tools for 3D Protein Structure "
+        "Prediction Using Machine Learning and Deep Learning"
     )
 
-    st.write("**Current prediction pipeline:** ColabFold / AlphaFold2")
+    st.write(
+        "**Current prediction pipeline:** ColabFold / AlphaFold2"
+    )
     st.write("**Initial benchmark:** 24FX")
     st.write("**Structural comparison tool:** TM-align")
 
     st.subheader("Evaluation plan")
+
     st.markdown("""
     - Predict structures for the selected reference proteins.
     - Compare predicted and reference structures consistently.
@@ -328,10 +348,10 @@ elif page == "Project Information":
     """)
 
     st.subheader("Current limitations")
+
     st.markdown("""
     - Only one protein prediction has been completed.
     - Additional prediction methods have not yet been evaluated.
     - Sequence-mapped RMSD remains to be calculated.
     - Conclusions are preliminary until the benchmark is complete.
     """)
-```
