@@ -1,7 +1,9 @@
+```python
 import streamlit as st
 import pandas as pd
 import py3Dmol
 import streamlit.components.v1 as components
+from pathlib import Path
 
 st.set_page_config(
     page_title="PROTEIN//LAB",
@@ -9,6 +11,7 @@ st.set_page_config(
     layout="wide",
 )
 
+# ---------- STYLE ----------
 st.markdown("""
 <style>
 .stApp {
@@ -31,12 +34,12 @@ div[data-testid="stMetric"] {
 </style>
 """, unsafe_allow_html=True)
 
+# ---------- HEADER ----------
 st.title("PROTEIN//LAB")
 st.caption("COMPUTATIONAL STRUCTURAL BIOINFORMATICS")
 
-st.sidebar.title("NAVIGATION")
 page = st.sidebar.radio(
-    "Open section",
+    "NAVIGATION",
     [
         "Overview",
         "Structure Lab",
@@ -46,51 +49,66 @@ page = st.sidebar.radio(
     ],
 )
 
+# ---------- PROTEIN DATA ----------
 proteins = pd.DataFrame([
     {
         "Protein ID": "24FX",
         "Protein": "Verruculogen synthase",
-        "Length": 285,
-        "Status": "Prediction complete",
+        "Length (aa)": 285,
+        "Prediction": "Complete",
+        "TM-score": 0.9823,
+        "RMSD (Å)": 0.843,
     },
     {
         "Protein ID": "21FM",
         "Protein": "Human dUTPase",
-        "Length": 161,
-        "Status": "Pending",
+        "Length (aa)": 161,
+        "Prediction": "Pending",
+        "TM-score": None,
+        "RMSD (Å)": None,
     },
     {
         "Protein ID": "28NK",
         "Protein": "Phosphopantetheine adenylyltransferase",
-        "Length": 162,
-        "Status": "Pending",
+        "Length (aa)": 162,
+        "Prediction": "Pending",
+        "TM-score": None,
+        "RMSD (Å)": None,
     },
     {
         "Protein ID": "29LB",
         "Protein": "L-DOPA extradiol dioxygenase",
-        "Length": 278,
-        "Status": "Pending",
+        "Length (aa)": 278,
+        "Prediction": "Pending",
+        "TM-score": None,
+        "RMSD (Å)": None,
     },
     {
         "Protein ID": "29SV",
         "Protein": "Carbonic anhydrase XII",
-        "Length": 263,
-        "Status": "Pending",
+        "Length (aa)": 263,
+        "Prediction": "Pending",
+        "TM-score": None,
+        "RMSD (Å)": None,
     },
 ])
 
+# ---------- OVERVIEW ----------
 if page == "Overview":
     st.header("Project Overview")
+
     st.write(
-        "Comparative performance analysis of computational tools "
-        "for 3D protein structure prediction using machine learning "
+        "Comparative evaluation of computational tools for "
+        "3D protein structure prediction using machine learning "
         "and deep learning."
     )
 
+    completed = int((proteins["Prediction"] == "Complete").sum())
+
     c1, c2, c3 = st.columns(3)
-    c1.metric("Candidate proteins", "5")
-    c2.metric("Completed predictions", "1")
-    c3.metric("Methods tested", "1")
+    c1.metric("Reference proteins", len(proteins))
+    c2.metric("Completed predictions", completed)
+    c3.metric("Methods with results", 1)
 
     st.subheader("Preliminary result — 24FX")
 
@@ -100,36 +118,129 @@ if page == "Overview":
     c3.metric("Sequence length", "285 aa")
 
     st.caption(
-        "Preliminary structural comparison. Further validation "
-        "and leakage assessment remain necessary."
+        "Preliminary result for one protein. Additional validation "
+        "and assessment of possible template bias are required."
     )
 
-    st.subheader("Protein status")
-    st.dataframe(proteins, use_container_width=True, hide_index=True)
+    st.subheader("Protein analysis status")
+    st.dataframe(
+        proteins,
+        use_container_width=True,
+        hide_index=True,
+    )
 
+# ---------- STRUCTURE LAB ----------
 elif page == "Structure Lab":
     st.header("3D Protein Structure")
-    st.write("Explore the available 24FX predicted structure.")
-
-    st.info(
-        "The predicted PDB file must be added to the GitHub repository "
-        "before the hosted viewer can load it."
+    st.write(
+        "Inspect the predicted structure of 24FX. "
+        "Upload the corresponding PDB file below if it is not "
+        "already included in the app repository."
     )
 
-    st.code(
-        "results/test_24FX/"
-        "24FX_Verruculogen_synthase_unrelaxed_rank_001_"
-        "alphafold2_ptm_model_5_seed_000.pdb"
+    uploaded_pdb = st.file_uploader(
+        "Upload predicted PDB structure",
+        type=["pdb"],
+        key="structure_upload",
     )
 
+    pdb_text = None
+
+    if uploaded_pdb is not None:
+        pdb_text = uploaded_pdb.getvalue().decode(
+            "utf-8", errors="replace"
+        )
+    else:
+        possible_paths = [
+            Path("data/24FX_rank_001.pdb"),
+            Path("24FX_rank_001.pdb"),
+            Path("data/24FX.pdb"),
+        ]
+
+        for pdb_path in possible_paths:
+            if pdb_path.exists():
+                pdb_text = pdb_path.read_text(
+                    encoding="utf-8", errors="replace"
+                )
+                st.success(f"Loaded structure: {pdb_path}")
+                break
+
+    if pdb_text:
+        if not any(
+            line.startswith(("ATOM  ", "HETATM"))
+            for line in pdb_text.splitlines()
+        ):
+            st.error("The uploaded file does not appear to contain PDB atom records.")
+        else:
+            view_style = st.selectbox(
+                "Structure representation",
+                ["Cartoon", "Stick", "Sphere"],
+            )
+
+            color_style = st.selectbox(
+                "Color scheme",
+                ["Spectrum", "Chain", "Secondary structure"],
+            )
+
+            style_map = {
+                "Spectrum": {"cartoon": {"color": "spectrum"}},
+                "Chain": {"cartoon": {"color": "chain"}},
+                "Secondary structure": {
+                    "cartoon": {
+                        "color": "spectrum",
+                        "arrows": True,
+                    }
+                },
+            }
+
+            if view_style == "Cartoon":
+                structure_style = style_map[color_style]
+            elif view_style == "Stick":
+                structure_style = {"stick": {}}
+            else:
+                structure_style = {"sphere": {"scale": 0.3}}
+
+            viewer = py3Dmol.view(
+                width=900,
+                height=550,
+            )
+            viewer.addModel(pdb_text, "pdb")
+            viewer.setStyle(structure_style)
+            viewer.zoomTo()
+
+            components.html(
+                viewer._make_html(),
+                height=570,
+                scrolling=False,
+            )
+
+            st.download_button(
+                "Download loaded PDB",
+                data=pdb_text,
+                file_name="protein_structure.pdb",
+                mime="chemical/x-pdb",
+            )
+    else:
+        st.info(
+            "No PDB file is available yet. Upload the predicted "
+            "24FX rank-001 PDB file to display the 3D structure."
+        )
+
+    st.caption(
+        "The viewer displays the supplied coordinates; it does not "
+        "perform a new prediction or structural validation."
+    )
+
+# ---------- PROTEIN LIBRARY ----------
 elif page == "Protein Library":
     st.header("Protein Library")
 
     search = st.text_input("Search by protein ID or name")
+
     filtered = proteins[
         proteins.apply(
             lambda row: search.lower() in " ".join(
-                row.astype(str)
+                row.fillna("").astype(str)
             ).lower(),
             axis=1,
         )
@@ -146,27 +257,39 @@ elif page == "Protein Library":
         proteins["Protein ID"].tolist(),
     )
 
-    row = proteins[proteins["Protein ID"] == selected].iloc[0]
-    st.subheader(row["Protein"])
-    st.write(f"Protein ID: {selected}")
-    st.write(f"Sequence length: {row['Length']} amino acids")
-    st.write(f"Status: {row['Status']}")
+    row = proteins[
+        proteins["Protein ID"] == selected
+    ].iloc[0]
 
+    st.subheader(row["Protein"])
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Protein ID", selected)
+    c2.metric("Length", f"{row['Length (aa)']} aa")
+    c3.metric("Prediction status", row["Prediction"])
+
+    if pd.notna(row["TM-score"]):
+        st.metric("Preliminary TM-score", f"{row['TM-score']:.4f}")
+        st.metric("Preliminary RMSD", f"{row['RMSD (Å)']:.3f} Å")
+    else:
+        st.info("Structural comparison metrics are not available yet.")
+
+# ---------- METHOD COMPARISON ----------
 elif page == "Method Comparison":
     st.header("Prediction Method Comparison")
 
     methods = pd.DataFrame([
         {
             "Method": "ColabFold / AlphaFold2",
-            "Status": "One prediction completed",
+            "Status": "Initial prediction completed for 24FX",
         },
         {
             "Method": "ESMFold",
-            "Status": "Not yet tested",
+            "Status": "Not yet evaluated",
         },
         {
             "Method": "MODELLER",
-            "Status": "Not yet tested",
+            "Status": "Not yet evaluated",
         },
     ])
 
@@ -177,22 +300,38 @@ elif page == "Method Comparison":
     )
 
     st.warning(
-        "A comparative performance ranking cannot be established "
-        "until additional experiments have been completed."
+        "A comparative ranking requires results from the same "
+        "benchmark proteins and a consistent evaluation protocol."
     )
 
+# ---------- PROJECT INFORMATION ----------
 elif page == "Project Information":
     st.header("Project Information")
 
-    st.write("**Project:** Protein Structure Prediction and Evaluation")
-    st.write("**Primary method tested:** ColabFold / AlphaFold2-based")
-    st.write("**Current benchmark protein:** 24FX")
-    st.write("**Reference comparison:** TM-align")
+    st.write(
+        "**Project title:** Comparative Performance Analysis of "
+        "Computational Tools for 3D Protein Structure Prediction "
+        "Using Machine Learning and Deep Learning"
+    )
+
+    st.write("**Current prediction pipeline:** ColabFold / AlphaFold2")
+    st.write("**Initial benchmark:** 24FX")
+    st.write("**Structural comparison tool:** TM-align")
+
+    st.subheader("Evaluation plan")
+    st.markdown("""
+    - Predict structures for the selected reference proteins.
+    - Compare predicted and reference structures consistently.
+    - Report structural similarity and RMSD with clear definitions.
+    - Evaluate confidence scores and computational requirements.
+    - Assess possible template or training-data bias.
+    """)
 
     st.subheader("Current limitations")
     st.markdown("""
     - Only one protein prediction has been completed.
     - Additional prediction methods have not yet been evaluated.
     - Sequence-mapped RMSD remains to be calculated.
-    - Potential template and training-data leakage needs assessment.
+    - Conclusions are preliminary until the benchmark is complete.
     """)
+```
